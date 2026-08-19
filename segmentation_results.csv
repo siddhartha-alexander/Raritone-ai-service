@@ -1,0 +1,4 @@
+image,person_detected,mask_generated,quality,processing_time,notes
+darkbackground.jpg,True,True,acceptable,0.5844,Segmentation successful
+person.jpg,True,True,acceptable,0.6016,Segmentation successful
+person2.jpg,True,True,acceptable,1.1166,Segmentation successful

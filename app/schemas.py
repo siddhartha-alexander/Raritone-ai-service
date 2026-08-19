@@ -2,7 +2,6 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-
 class HealthResponse(BaseModel):
     status: str
     service: str
@@ -33,3 +32,23 @@ class AIResponse(BaseModel):
     measurements: Optional[Measurements] = None
     model_version: str
     processing_time: float
+
+
+
+class SegmentationResponse(BaseModel):
+    success: bool
+    person_detected: bool
+    mask_reference: Optional[str] = None
+    background_removed_reference: Optional[str] = None
+    model_version: str
+    processing_time: float
+
+
+class TryOnPreparationResponse(BaseModel):
+    success: bool
+    person_detected: bool
+    pose_available: bool
+    person_mask: Optional[str] = None
+    garment_region: Optional[str] = None
+    processing_time: float
+    model_version: str
