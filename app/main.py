@@ -1,14 +1,25 @@
+import asyncio
 import logging
 import time
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from app.inference import MODEL_VERSION as TRYON_MODEL_VERSION
+from app.inference import run_tryon
 from app.measurements import calculate_measurements
+from app.person_processor import prepare_tryon_input
 from app.pose_detector import PoseDetector
 from app.preprocessing import (
     decode_image,
     preprocess_image,
     validate_image_type,
+)
+from app.schemas import (
+    AIResponse,
+    HealthResponse,
+    SegmentationResponse,
+    TryOnPreparationResponse,
+    TryOnResponse,
 )
 from app.segmentation import (
     person_detected,
@@ -16,17 +27,11 @@ from app.segmentation import (
     save_outputs,
     segment_person,
 )
-from app.schemas import (
-    AIResponse,
-    HealthResponse,
-    SegmentationResponse,
-    TryOnPreparationResponse,
-)
 
 
-# =========================================================
+
 # Logging
-# =========================================================
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,41 +41,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# =========================================================
+
 # FastAPI Application
-# =========================================================
+
 
 app = FastAPI(
     title="Raritone AI Body Analysis Service",
     description=(
         "Computer vision API for pose detection, "
-        "body measurements, and person segmentation."
+        "body measurements, segmentation, and baseline "
+        "2D virtual try-on."
     ),
     version="1.0.0",
 )
 
 
-# =========================================================
+
 # Configuration
-# =========================================================
+
 
 MODEL_VERSION = "pose-v1"
 SEGMENTATION_MODEL_VERSION = "seg-v1"
 SERVICE_NAME = "raritone-ai"
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
+TRYON_TIMEOUT_SECONDS = 120
 
 
-# =========================================================
+
 # AI Model
-# =========================================================
+
 
 pose_detector = PoseDetector()
 
 
-# =========================================================
+
 # Health Check
-# =========================================================
+
 
 @app.get(
     "/api/ai/health",
@@ -80,20 +87,27 @@ def health_check():
     return {
         "status": "healthy",
         "service": SERVICE_NAME,
-        "model_version": MODEL_VERSION,
+        "model_version": (
+            f"{MODEL_VERSION}+"
+            f"{SEGMENTATION_MODEL_VERSION}+"
+            f"{TRYON_MODEL_VERSION}"
+        ),
     }
 
 
-# =========================================================
+
 # Common Image Validation
-# =========================================================
+
 
 async def read_and_preprocess_image(file: UploadFile):
     """
     Validate, read, decode, and preprocess an uploaded image.
     """
 
-    logger.info("Request received")
+    logger.info(
+        "Image request received: %s",
+        file.filename,
+    )
 
     # -----------------------------------------------------
     # Validate file type
@@ -126,7 +140,10 @@ async def read_and_preprocess_image(file: UploadFile):
     if len(image_bytes) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail="Image exceeds the maximum allowed size of 10 MB.",
+            detail=(
+                "Image exceeds the maximum allowed "
+                "size of 10 MB."
+            ),
         )
 
     # -----------------------------------------------------
@@ -170,9 +187,9 @@ async def read_and_preprocess_image(file: UploadFile):
     return image
 
 
-# =========================================================
+
 # Pose Processing
-# =========================================================
+
 
 async def process_pose(file: UploadFile):
     """
@@ -182,10 +199,6 @@ async def process_pose(file: UploadFile):
     start_time = time.perf_counter()
 
     image = await read_and_preprocess_image(file)
-
-    # -----------------------------------------------------
-    # Pose Detection
-    # -----------------------------------------------------
 
     logger.info("Pose detection started")
 
@@ -211,10 +224,6 @@ async def process_pose(file: UploadFile):
         pose_time,
     )
 
-    # -----------------------------------------------------
-    # No person detected
-    # -----------------------------------------------------
-
     if landmarks is None:
         raise HTTPException(
             status_code=404,
@@ -226,30 +235,16 @@ async def process_pose(file: UploadFile):
         4,
     )
 
-    logger.info(
-        "Total processing time: %.4fs",
-        total_time,
-    )
-
-    logger.info("Response returned")
-
     return landmarks, total_time
 
 
-# =========================================================
+
 # Pose Endpoint
-# =========================================================
+
 
 @app.post(
     "/api/ai/pose",
     response_model=AIResponse,
-    responses={
-        400: {"description": "Invalid or corrupted image"},
-        404: {"description": "No person detected"},
-        413: {"description": "Image exceeds maximum allowed size"},
-        422: {"description": "Image file was not provided"},
-        500: {"description": "Internal server error"},
-    },
 )
 async def pose_api(
     file: UploadFile = File(...)
@@ -266,20 +261,13 @@ async def pose_api(
     }
 
 
-# =========================================================
+
 # Measurements Endpoint
-# =========================================================
+
 
 @app.post(
     "/api/ai/measurements",
     response_model=AIResponse,
-    responses={
-        400: {"description": "Invalid or corrupted image"},
-        404: {"description": "No person detected"},
-        413: {"description": "Image exceeds maximum allowed size"},
-        422: {"description": "Image file was not provided"},
-        500: {"description": "Internal server error"},
-    },
 )
 async def measurements_api(
     file: UploadFile = File(...)
@@ -287,9 +275,13 @@ async def measurements_api(
     landmarks, processing_time = await process_pose(file)
 
     try:
-        measurements = calculate_measurements(landmarks)
+        measurements = calculate_measurements(
+            landmarks
+        )
     except Exception:
-        logger.exception("Measurement calculation failed")
+        logger.exception(
+            "Measurement calculation failed"
+        )
 
         raise HTTPException(
             status_code=500,
@@ -306,37 +298,20 @@ async def measurements_api(
     }
 
 
-# =========================================================
+
 # Segmentation Endpoint
-# =========================================================
+
 
 @app.post(
     "/api/ai/segment",
     response_model=SegmentationResponse,
-    responses={
-        400: {"description": "Invalid or corrupted image"},
-        404: {"description": "No person detected"},
-        413: {"description": "Image exceeds maximum allowed size"},
-        422: {"description": "Image file was not provided"},
-        500: {"description": "Internal server error"},
-    },
 )
 async def segment_api(
     file: UploadFile = File(...)
 ):
     start_time = time.perf_counter()
 
-    logger.info("Segmentation request received")
-
     image = await read_and_preprocess_image(file)
-
-    # -----------------------------------------------------
-    # Person Segmentation
-    # -----------------------------------------------------
-
-    logger.info("Person segmentation started")
-
-    segmentation_start = time.perf_counter()
 
     try:
         mask = segment_person(image)
@@ -348,29 +323,11 @@ async def segment_api(
             detail="Segmentation processing failed.",
         )
 
-    segmentation_time = round(
-        time.perf_counter() - segmentation_start,
-        4,
-    )
-
-    logger.info(
-        "Person segmentation completed: %.4fs",
-        segmentation_time,
-    )
-
-    # -----------------------------------------------------
-    # Person Detection Check
-    # -----------------------------------------------------
-
     if not person_detected(mask):
         raise HTTPException(
             status_code=404,
             detail="No person detected in the image.",
         )
-
-    # -----------------------------------------------------
-    # Background Removal
-    # -----------------------------------------------------
 
     try:
         background_removed = remove_background(
@@ -378,98 +335,74 @@ async def segment_api(
             mask,
         )
 
-        mask_reference, background_reference = save_outputs(
-            mask,
-            background_removed,
+        mask_reference, background_reference = (
+            save_outputs(
+                mask,
+                background_removed,
+            )
         )
 
     except Exception:
-        logger.exception("Background removal failed")
+        logger.exception(
+            "Background removal failed"
+        )
 
         raise HTTPException(
             status_code=500,
             detail="Background removal failed.",
         )
 
-    # -----------------------------------------------------
-    # Total Time
-    # -----------------------------------------------------
-
     total_time = round(
         time.perf_counter() - start_time,
         4,
     )
 
-    logger.info(
-        "Segmentation processing time: %.4fs",
-        total_time,
-    )
-
-    logger.info("Segmentation response returned")
-
     return {
         "success": True,
         "person_detected": True,
         "mask_reference": mask_reference,
-        "background_removed_reference": background_reference,
-        "model_version": SEGMENTATION_MODEL_VERSION,
+        "background_removed_reference": (
+            background_reference
+        ),
+        "model_version": (
+            SEGMENTATION_MODEL_VERSION
+        ),
         "processing_time": total_time,
     }
 
 
-# =========================================================
+
 # Try-On Preparation Endpoint
-# =========================================================
+
 
 @app.post(
     "/api/ai/prepare-tryon",
     response_model=TryOnPreparationResponse,
-    responses={
-        400: {"description": "Invalid or corrupted image"},
-        404: {"description": "No person detected"},
-        413: {"description": "Image exceeds maximum allowed size"},
-        422: {"description": "Image file was not provided"},
-        500: {"description": "Internal server error"},
-    },
 )
 async def prepare_tryon_api(
     file: UploadFile = File(...)
 ):
     start_time = time.perf_counter()
 
-    logger.info("Try-on preparation request received")
-
     image = await read_and_preprocess_image(file)
-
-    # -----------------------------------------------------
-    # Person Segmentation
-    # -----------------------------------------------------
-
-    logger.info("Try-on segmentation started")
 
     try:
         mask = segment_person(image)
     except Exception:
-        logger.exception("Try-on segmentation failed")
+        logger.exception(
+            "Try-on segmentation failed"
+        )
 
         raise HTTPException(
             status_code=500,
             detail="Segmentation processing failed.",
         )
 
-    # -----------------------------------------------------
-    # Person Detection
-    # -----------------------------------------------------
-
     if not person_detected(mask):
         raise HTTPException(
             status_code=404,
             detail="No person detected in the image.",
         )
-
-    # -----------------------------------------------------
-    # Background Removed Output
-    # -----------------------------------------------------
 
     try:
         background_removed = remove_background(
@@ -484,19 +417,13 @@ async def prepare_tryon_api(
 
     except Exception:
         logger.exception(
-            "Try-on background preparation failed"
+            "Try-on preparation failed"
         )
 
         raise HTTPException(
             status_code=500,
             detail="Try-on preparation failed.",
         )
-
-    # -----------------------------------------------------
-    # Pose Detection
-    # -----------------------------------------------------
-
-    logger.info("Pose detection started")
 
     try:
         landmarks = pose_detector.detect(image)
@@ -512,36 +439,233 @@ async def prepare_tryon_api(
 
     pose_available = landmarks is not None
 
-    # -----------------------------------------------------
-    # Garment Region
-    # -----------------------------------------------------
-
-    # We currently do not have a dedicated clothing
-    # segmentation model, so we intentionally return None.
-    garment_region = None
-
-    # -----------------------------------------------------
-    # Total Processing Time
-    # -----------------------------------------------------
-
     processing_time = round(
         time.perf_counter() - start_time,
         4,
     )
-
-    logger.info(
-        "Try-on preparation completed: %.4fs",
-        processing_time,
-    )
-
-    logger.info("Try-on preparation response returned")
 
     return {
         "success": True,
         "person_detected": True,
         "pose_available": pose_available,
         "person_mask": mask_reference,
-        "garment_region": garment_region,
+        "garment_region": None,
         "processing_time": processing_time,
         "model_version": "pose-v1+seg-v1",
+    }
+
+
+
+# Final Try-On Endpoint
+
+
+@app.post(
+    "/api/ai/tryon",
+    response_model=TryOnResponse,
+    responses={
+        400: {
+            "description": (
+                "Invalid person or garment image"
+            )
+        },
+        404: {
+            "description": (
+                "No person detected in person image"
+            )
+        },
+        408: {
+            "description": "Try-on processing timeout"
+        },
+        413: {
+            "description": (
+                "Image exceeds maximum allowed size"
+            )
+        },
+        422: {
+            "description": (
+                "Required image file was not provided"
+            )
+        },
+        500: {
+            "description": (
+                "Try-on processing failed"
+            )
+        },
+    },
+)
+async def tryon_api(
+    person_image: UploadFile = File(...),
+    garment_image: UploadFile = File(...),
+):
+    """
+    Baseline pose-aware 2D virtual try-on endpoint.
+
+    Pipeline:
+    Person Image
+        ↓
+    Validation
+        ↓
+    Pose Detection + Segmentation
+        ↓
+    Garment Processing
+        ↓
+    Pose-Based Alignment
+        ↓
+    Baseline 2D Composite
+        ↓
+    Result
+    """
+
+    total_start = time.perf_counter()
+
+    logger.info(
+        "Try-on request received | "
+        "person=%s | garment=%s",
+        person_image.filename,
+        garment_image.filename,
+    )
+
+    # -----------------------------------------------------
+    # Read and validate person image
+    # -----------------------------------------------------
+
+    person = await read_and_preprocess_image(
+        person_image
+    )
+
+    # -----------------------------------------------------
+    # Read and validate garment image
+    # -----------------------------------------------------
+
+    garment = await read_and_preprocess_image(
+        garment_image
+    )
+
+    # -----------------------------------------------------
+    # Prepare model inputs
+    # -----------------------------------------------------
+
+    try:
+        (
+            person_input,
+            garment_input,
+            person_mask,
+            pose_data,
+            preparation_metadata,
+        ) = prepare_tryon_input(
+            person,
+            garment,
+        )
+
+    except ValueError as exc:
+        logger.warning(
+            "Try-on input preparation failed: %s",
+            str(exc),
+        )
+
+        if "No person detected" in str(exc):
+            raise HTTPException(
+                status_code=404,
+                detail=str(exc),
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception:
+        logger.exception(
+            "Unexpected try-on preparation failure"
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to prepare try-on inputs."
+            ),
+        )
+
+    # -----------------------------------------------------
+    # Run inference with timeout
+    # -----------------------------------------------------
+
+    try:
+        logger.info(
+            "Try-on inference started"
+        )
+
+        result_image, inference_metadata = (
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    run_tryon,
+                    person_input,
+                    garment_input,
+                    pose_data,
+                    person_mask,
+                ),
+                timeout=TRYON_TIMEOUT_SECONDS,
+            )
+        )
+
+    except asyncio.TimeoutError:
+        logger.error(
+            "Try-on processing timed out"
+        )
+
+        raise HTTPException(
+            status_code=408,
+            detail=(
+                "Try-on processing exceeded the "
+                "maximum allowed processing time."
+            ),
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "Try-on inference failed"
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Try-on inference failed: {str(exc)}"
+            ),
+        )
+
+    # -----------------------------------------------------
+    # Final timing
+    # -----------------------------------------------------
+
+    total_processing_time = round(
+        time.perf_counter() - total_start,
+        4,
+    )
+
+    logger.info(
+        "Try-on completed successfully | "
+        "preparation=%.4fs | "
+        "inference=%.4fs | "
+        "total=%.4fs",
+        preparation_metadata[
+            "total_preparation_time"
+        ],
+        inference_metadata[
+            "inference_time"
+        ],
+        total_processing_time,
+    )
+
+    # -----------------------------------------------------
+    # Return standardized response
+    # -----------------------------------------------------
+
+    return {
+        "success": True,
+        "status": "completed",
+        "result_image": inference_metadata[
+            "result_path"
+        ],
+        "model_version": TRYON_MODEL_VERSION,
+        "processing_time": total_processing_time,
     }

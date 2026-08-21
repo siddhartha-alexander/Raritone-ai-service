@@ -52,3 +52,12 @@ class TryOnPreparationResponse(BaseModel):
     garment_region: Optional[str] = None
     processing_time: float
     model_version: str
+
+
+
+class TryOnResponse(BaseModel):
+    success: bool
+    status: str
+    result_image: str
+    model_version: str
+    processing_time: float
