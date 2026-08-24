@@ -1,35 +1,44 @@
 # Raritone AI Service
 
-AI/ML computer-vision service for Raritone's virtual try-on pipeline.
+AI/ML computer-vision service for Raritone's 2D virtual try-on pipeline.
 
-## Overview
+## Features
 
-This service provides:
-
-- Person pose detection
-- Pose landmark extraction
-- Relative body proportion analysis
-- Person segmentation
-- Background removal
-- Try-on preparation
-- FastAPI APIs
+- Person pose detection using MediaPipe
+- Person segmentation and mask generation
+- Garment preprocessing and garment mask generation
+- Pose-aware garment alignment
+- Baseline 2D virtual try-on
+- FastAPI integration
+- Input validation and error handling
+- Processing-time measurement
+- VTON quality evaluation
 
 ## Pipeline
 
-User Image
-→ Image Validation
-→ OpenCV Preprocessing
-→ Person Segmentation
-→ Person Mask
-→ Pose Detection
-→ Landmarks
-→ Body Proportions
-→ FastAPI
-→ JSON Response
+Person Image + Garment Image  
+↓  
+Input Validation  
+↓  
+Person Preprocessing  
+↓  
+Pose Detection + Segmentation  
+↓  
+Garment Preprocessing  
+↓  
+Garment Mask  
+↓  
+Pose-Based Alignment  
+↓  
+Baseline 2D Try-On  
+↓  
+Result Image  
+↓  
+FastAPI JSON Response
 
 ## Technologies
 
-- Python
+- Python 3.12
 - OpenCV
 - MediaPipe
 - rembg
@@ -46,15 +55,25 @@ raritone-ai-service/
 ├── app/
 │   ├── main.py
 │   ├── pose_detector.py
+│   ├── pose_processor.py
+│   ├── person_processor.py
+│   ├── garment_processor.py
 │   ├── segmentation.py
+│   ├── tryon_pipeline.py
+│   ├── inference.py
 │   ├── preprocessing.py
 │   ├── measurements.py
 │   └── schemas.py
 ├── models/
-├── tests/
-├── sample_images/
+├── vton_dataset/
+│   ├── persons/
+│   ├── garments/
+│   ├── masks/
+│   ├── poses/
+│   └── results/
 ├── outputs/
+├── tests/
+├── vton_evaluation.csv
 ├── requirements.txt
 ├── API_DOCUMENTATION.md
-├── segmentation_results.csv
 └── README.md

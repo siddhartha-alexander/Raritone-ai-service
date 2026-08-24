@@ -1,0 +1,6 @@
+image_id,type,category,resolution,person_detected,mask_available,pose_available
+person_001,person,full_body,unknown,True,True,True
+person_002,person,full_body,unknown,True,True,True
+person_003,person,full_body,unknown,True,True,True
+garment_001,garment,tshirt,unknown,N/A,True,N/A
+garment_002,garment,tshirt,unknown,N/A,True,N/A

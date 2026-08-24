@@ -155,3 +155,32 @@ The current prototype has an average processing time of approximately 44 seconds
 The current implementation is a baseline pose-aware 2D virtual try-on prototype. It performs garment preprocessing, person segmentation, pose-based alignment, and image compositing.
 
 It is intended for engineering integration and testing and should not be presented as a photorealistic generative virtual try-on system.
+
+### Model Loading Strategy
+
+- MediaPipe pose detector is initialized once at application startup.
+- The segmentation session is reused across requests.
+- The current tryon-v1-baseline does not load a separate generative VTON model.
+- The baseline inference pipeline performs person preprocessing, segmentation, pose extraction, garment preprocessing, pose-aware alignment, and compositing.
+- A production VTON model can later replace the baseline inference stage while preserving the existing FastAPI contract.
+
+VTON Evaluation
+
+Test combinations: 6
+Successful combinations: 6
+Failure rate: 0%
+Average processing time: 2.3474 seconds
+
+Quality scores:
+- Garment alignment: 3.67/5
+- Garment preservation: 4.50/5
+- Body alignment: 3.50/5
+- Boundary quality: 3.50/5
+- Face preservation: 5.00/5
+- Overall realism: 3.50/5
+- Overall average quality: 3.94/5
+
+Top 3 visual limitations:
+1. Oversized garment placement on some body shapes.
+2. Sleeve/arm occlusion is not handled realistically.
+3. Garment boundaries and body conformity remain limited because the current system is a pose-aware compositing baseline rather than a generative VTON model.

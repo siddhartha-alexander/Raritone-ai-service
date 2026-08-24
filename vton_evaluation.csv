@@ -1,0 +1,7 @@
+pair_id,person_image,garment_image,success,processing_time,garment_alignment,garment_preservation,body_alignment,boundary_quality,face_preservation,overall_realism,result_image,failure_reason
+pair_001,darkbackground.jpg,garment.jpg,True,2.4498,3.0,4.0,3.0,3.0,5.0,3.0,vton_dataset\results\pair_001.png,
+pair_002,darkbackground.jpg,tshirt.jpg,True,2.297,4.0,5.0,4.0,4.0,5.0,4.0,vton_dataset\results\pair_002.png,
+pair_003,person.jpg,garment.jpg,True,2.1478,3.0,4.0,3.0,3.0,5.0,3.0,vton_dataset\results\pair_003.png,
+pair_004,person.jpg,tshirt.jpg,True,2.2639,5.0,5.0,4.0,4.0,5.0,4.0,vton_dataset\results\pair_004.png,
+pair_005,person2.jpg,garment.jpg,True,2.7146,3.0,4.0,3.0,3.0,5.0,3.0,vton_dataset\results\pair_005.png,
+pair_006,person2.jpg,tshirt.jpg,True,2.2116,4.0,5.0,4.0,4.0,5.0,4.0,vton_dataset\results\pair_006.png,
