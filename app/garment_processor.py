@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 import cv2
 import numpy as np
@@ -278,4 +279,173 @@ def save_processed_garment(
         "mask_path": str(
             mask_path
         ),
+    }
+def detect_garment_category(
+    garment,
+    mask,
+):
+    """
+    Basic geometric garment category estimation.
+
+    This is a heuristic validator, not a trained
+    clothing-classification model.
+    """
+
+    height, width = garment.shape[:2]
+
+    if width <= 0 or height <= 0:
+        return "unknown"
+
+    aspect_ratio = height / width
+
+    # Conservative categories because geometry alone
+    # cannot reliably distinguish shirt vs T-shirt.
+    if aspect_ratio >= 1.55:
+        return "long_garment"
+
+    return "top"
+
+
+def prepare_garment_v2(image):
+    """
+    Garment preprocessing v2.
+
+    Performs:
+    - validation
+    - background removal
+    - garment crop
+    - mask generation
+    - bounding-box extraction
+    - aspect-ratio preserving resize
+    - resolution normalization
+    - basic category validation
+    """
+
+    start_time = time.perf_counter()
+
+    if image is None:
+        return {
+            "valid": False,
+            "error_code": "INVALID_GARMENT",
+            "message": "Garment image is invalid.",
+        }
+
+    if not isinstance(image, np.ndarray):
+        return {
+            "valid": False,
+            "error_code": "INVALID_GARMENT",
+            "message": "Garment image format is invalid.",
+        }
+
+    if image.size == 0:
+        return {
+            "valid": False,
+            "error_code": "INVALID_GARMENT",
+            "message": "Garment image is empty.",
+        }
+
+    original_height, original_width = image.shape[:2]
+
+    if original_width < 100 or original_height < 100:
+        return {
+            "valid": False,
+            "error_code": "LOW_GARMENT_RESOLUTION",
+            "message": (
+                "Please upload a higher-resolution "
+                "garment image."
+            ),
+        }
+
+    try:
+        garment, garment_mask = process_garment(
+            image
+        )
+    except Exception as exc:
+        return {
+            "valid": False,
+            "error_code": "GARMENT_PROCESSING_FAILED",
+            "message": str(exc),
+        }
+
+    # Bounding box after background removal
+    points = cv2.findNonZero(
+        garment_mask
+    )
+
+    if points is None:
+        return {
+            "valid": False,
+            "error_code": "GARMENT_NOT_DETECTED",
+            "message": (
+                "No valid garment could be detected."
+            ),
+        }
+
+    x, y, w, h = cv2.boundingRect(
+        points
+    )
+
+    category = detect_garment_category(
+        garment,
+        garment_mask,
+    )
+
+    garment_input = resize_with_padding(
+        garment,
+        target_size=512,
+        is_mask=False,
+    )
+
+    mask_input = resize_with_padding(
+        garment_mask,
+        target_size=512,
+        is_mask=True,
+    )
+
+    # Simple foreground coverage quality check
+    foreground_ratio = (
+        np.count_nonzero(mask_input > 30)
+        / mask_input.size
+    )
+
+    garment_quality = round(
+        min(
+            foreground_ratio * 2.0,
+            1.0,
+        ),
+        4,
+    )
+
+    if garment_quality < 0.10:
+        return {
+            "valid": False,
+            "error_code": "LOW_GARMENT_QUALITY",
+            "message": (
+                "Garment could not be clearly separated "
+                "from the background."
+            ),
+            "garment_quality": garment_quality,
+        }
+
+    processing_time = round(
+        time.perf_counter() - start_time,
+        4,
+    )
+
+    return {
+        "valid": True,
+        "category": category,
+        "width": 512,
+        "height": 512,
+        "mask_available": True,
+        "garment_quality": garment_quality,
+        "bounding_box": {
+            "x": int(x),
+            "y": int(y),
+            "width": int(w),
+            "height": int(h),
+        },
+        "garment_input": garment_input,
+        "garment_mask": mask_input,
+        "processing_time": processing_time,
     }

@@ -3,83 +3,132 @@ import time
 import cv2
 import numpy as np
 
-from app.garment_processor import (
-    prepare_garment_image,
-)
 from app.pose_detector import PoseDetector
-from app.preprocessing import (
-    preprocess_image,
-)
+from app.preprocessing import preprocess_image
 from app.segmentation import (
     person_detected,
     segment_person,
 )
 
 
-# Load once when server starts
 pose_detector = PoseDetector()
 
 
-def resize_person_preserve_ratio(
-    image,
-    max_dimension=1024,
-):
+MIN_IMAGE_WIDTH = 300
+MIN_IMAGE_HEIGHT = 400
+MIN_POSE_QUALITY = 0.60
+MIN_MASK_QUALITY = 0.10
+
+
+def calculate_pose_quality(pose_data):
     """
-    Resize large person images while preserving
-    aspect ratio.
+    Average landmark visibility score.
+    Returns value between 0 and 1.
     """
 
-    height, width = image.shape[:2]
+    if not pose_data:
+        return 0.0
 
-    max_side = max(
-        height,
-        width,
+    visibility_values = []
+
+    for landmark in pose_data.values():
+        visibility = landmark.get(
+            "visibility",
+            0.0,
+        )
+
+        visibility_values.append(
+            float(visibility)
+        )
+
+    if not visibility_values:
+        return 0.0
+
+    return round(
+        sum(visibility_values)
+        / len(visibility_values),
+        4,
     )
 
-    if max_side <= max_dimension:
-        return image
 
-    scale = (
-        max_dimension / max_side
+def calculate_mask_quality(mask):
+    """
+    Basic mask-quality heuristic based on foreground coverage.
+    """
+
+    if mask is None:
+        return 0.0
+
+    total_pixels = mask.size
+
+    if total_pixels == 0:
+        return 0.0
+
+    foreground_pixels = np.count_nonzero(
+        mask > 30
     )
 
-    new_width = int(
-        width * scale
+    foreground_ratio = (
+        foreground_pixels
+        / total_pixels
     )
 
-    new_height = int(
-        height * scale
-    )
+    # Extremely tiny or nearly full-image masks
+    # are considered suspicious.
+    if foreground_ratio < 0.02:
+        return 0.0
 
-    return cv2.resize(
-        image,
-        (
-            new_width,
-            new_height,
+    if foreground_ratio > 0.95:
+        return 0.0
+
+    return round(
+        min(
+            foreground_ratio * 3.0,
+            1.0,
         ),
-        interpolation=cv2.INTER_AREA,
+        4,
     )
+
+
+def check_body_inside_frame(pose_data):
+    """
+    Check whether important landmarks remain inside
+    the normalized image boundaries.
+    """
+
+    important_landmarks = [
+        "left_shoulder",
+        "right_shoulder",
+        "left_hip",
+        "right_hip",
+        "left_knee",
+        "right_knee",
+        "left_ankle",
+        "right_ankle",
+    ]
+
+    for name in important_landmarks:
+
+        landmark = pose_data.get(name)
+
+        if landmark is None:
+            return False
+
+        x = landmark.get("x", -1)
+        y = landmark.get("y", -1)
+
+        if not (
+            0.0 <= x <= 1.0
+            and 0.0 <= y <= 1.0
+        ):
+            return False
+
+    return True
 
 
 def prepare_person_image(image):
     """
-    Robust person preprocessing pipeline.
-
-    Image
-        ↓
-    Validation
-        ↓
-    Resize
-        ↓
-    OpenCV preprocessing
-        ↓
-    Segmentation
-        ↓
-    Pose detection
-        ↓
-    Normalization
-        ↓
-    Model-ready data
+    Robust person-quality validation pipeline.
     """
 
     start_time = time.perf_counter()
@@ -94,8 +143,7 @@ def prepare_person_image(image):
         np.ndarray,
     ):
         raise ValueError(
-            "Person image must be "
-            "a NumPy array."
+            "Person image must be a NumPy array."
         )
 
     if image.size == 0:
@@ -103,50 +151,140 @@ def prepare_person_image(image):
             "Person image is empty."
         )
 
-    # Preserve aspect ratio
-    person_input = (
-        resize_person_preserve_ratio(
-            image
-        )
-    )
+    height, width = image.shape[:2]
 
-    # Existing OpenCV preprocessing
+    # --------------------------------------------------
+    # Resolution check
+    # --------------------------------------------------
+
+    if (
+        width < MIN_IMAGE_WIDTH
+        or height < MIN_IMAGE_HEIGHT
+    ):
+        return {
+            "valid": False,
+            "error_code": "LOW_RESOLUTION",
+            "message": (
+                "Please upload a higher-resolution "
+                "full-body image."
+            ),
+        }
+
+    # --------------------------------------------------
+    # Preprocessing
+    # --------------------------------------------------
+
     person_input = preprocess_image(
+        image
+    )
+
+    # --------------------------------------------------
+    # Segmentation
+    # --------------------------------------------------
+
+    person_mask = segment_person(
         person_input
     )
 
-    # Person segmentation
-    mask = segment_person(
-        person_input
-    )
+    if person_mask is None:
+        return {
+            "valid": False,
+            "error_code": "MASK_GENERATION_FAILED",
+            "message": (
+                "Person segmentation failed."
+            ),
+        }
 
-    if mask is None:
-        raise ValueError(
-            "Failed to generate person mask."
-        )
+    if not person_detected(
+        person_mask
+    ):
+        return {
+            "valid": False,
+            "error_code": "PERSON_NOT_DETECTED",
+            "message": (
+                "Please upload an image containing "
+                "one clearly visible person."
+            ),
+        }
 
-    if not person_detected(mask):
-        raise ValueError(
-            "No person detected in the image."
-        )
-
+    # --------------------------------------------------
     # Pose detection
+    # --------------------------------------------------
+
     pose_data = pose_detector.detect(
         person_input
     )
 
     if pose_data is None:
-        raise ValueError(
-            "Pose information could not "
-            "be detected."
-        )
+        return {
+            "valid": False,
+            "error_code": "POSE_NOT_DETECTED",
+            "message": (
+                "Please upload a clear full-body image "
+                "with the person facing the camera."
+            ),
+        }
 
-    # Model-ready normalized input
-    normalized_input = (
-        person_input.astype(
-            np.float32
-        ) / 255.0
+    # --------------------------------------------------
+    # Quality scores
+    # --------------------------------------------------
+
+    pose_quality = (
+        calculate_pose_quality(
+            pose_data
+        )
     )
+
+    mask_quality = (
+        calculate_mask_quality(
+            person_mask
+        )
+    )
+
+    body_inside_frame = (
+        check_body_inside_frame(
+            pose_data
+        )
+    )
+
+    # --------------------------------------------------
+    # Quality rejection
+    # --------------------------------------------------
+
+    if pose_quality < MIN_POSE_QUALITY:
+        return {
+            "valid": False,
+            "error_code": "LOW_POSE_QUALITY",
+            "message": (
+                "Pose quality is too low. "
+                "Please use a clear front-facing image."
+            ),
+            "pose_quality": pose_quality,
+            "mask_quality": mask_quality,
+        }
+
+    if mask_quality < MIN_MASK_QUALITY:
+        return {
+            "valid": False,
+            "error_code": "LOW_MASK_QUALITY",
+            "message": (
+                "Person segmentation quality is too low."
+            ),
+            "pose_quality": pose_quality,
+            "mask_quality": mask_quality,
+        }
+
+    if not body_inside_frame:
+        return {
+            "valid": False,
+            "error_code": "PARTIAL_BODY",
+            "message": (
+                "Please upload a full-body image "
+                "with the complete body inside the frame."
+            ),
+            "pose_quality": pose_quality,
+            "mask_quality": mask_quality,
+        }
 
     processing_time = round(
         time.perf_counter()
@@ -154,92 +292,13 @@ def prepare_person_image(image):
         4,
     )
 
-    metadata = {
-        "person_shape": list(
-            person_input.shape
-        ),
-        "person_detected": True,
-        "mask_available": True,
-        "pose_available": True,
-        "processing_time": (
-            processing_time
-        ),
-    }
-
     return {
+        "valid": True,
+        "person_count": 1,
         "person_input": person_input,
-        "normalized_input": (
-            normalized_input
-        ),
-        "person_mask": mask,
+        "person_mask": person_mask,
         "pose_data": pose_data,
-        "metadata": metadata,
+        "pose_quality": pose_quality,
+        "mask_quality": mask_quality,
+        "processing_time": processing_time,
     }
-
-
-def prepare_tryon_input(
-    person_image,
-    garment_image,
-):
-    """
-    Maintain compatibility with the existing
-    /api/ai/tryon pipeline.
-    """
-
-    start_time = time.perf_counter()
-
-    person_result = (
-        prepare_person_image(
-            person_image
-        )
-    )
-
-    garment_result = (
-        prepare_garment_image(
-            garment_image
-        )
-    )
-
-    total_time = round(
-        time.perf_counter()
-        - start_time,
-        4,
-    )
-
-    metadata = {
-        "person_shape": list(
-            person_result[
-                "person_input"
-            ].shape
-        ),
-        "garment_shape": list(
-            garment_result[
-                "garment_input"
-            ].shape
-        ),
-        "person_detected": True,
-        "mask_available": True,
-        "pose_available": True,
-        "preprocessing_time": (
-            total_time
-        ),
-        "total_preparation_time": (
-            total_time
-        ),
-    }
-
-    return (
-        person_result[
-            "person_input"
-        ],
-        garment_result[
-            "garment_input"
-        ],
-        person_result[
-            "person_mask"
-        ],
-        person_result[
-            "pose_data"
-        ],
-        metadata,
-    )

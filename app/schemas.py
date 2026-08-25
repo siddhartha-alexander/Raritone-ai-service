@@ -55,9 +55,16 @@ class TryOnPreparationResponse(BaseModel):
 
 
 
+class TryOnQuality(BaseModel):
+    pose: float
+    mask: float
+    garment: float
+
+
 class TryOnResponse(BaseModel):
     success: bool
     status: str
     result_image: str
     model_version: str
+    quality: TryOnQuality
     processing_time: float

@@ -4,15 +4,20 @@ import time
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from app.garment_processor import prepare_garment_v2
 from app.inference import MODEL_VERSION as TRYON_MODEL_VERSION
 from app.inference import run_tryon
 from app.measurements import calculate_measurements
-from app.person_processor import prepare_tryon_input
+from app.person_processor import prepare_person_image
 from app.pose_detector import PoseDetector
 from app.preprocessing import (
     decode_image,
     preprocess_image,
     validate_image_type,
+)
+from app.quality_gate import (
+    QualityGateError,
+    run_quality_gate,
 )
 from app.schemas import (
     AIResponse,
@@ -49,10 +54,10 @@ app = FastAPI(
     title="Raritone AI Body Analysis Service",
     description=(
         "Computer vision API for pose detection, "
-        "body measurements, segmentation, and baseline "
-        "2D virtual try-on."
+        "body measurements, segmentation, quality validation, "
+        "and baseline 2D virtual try-on."
     ),
-    version="1.0.0",
+    version="1.1.0",
 )
 
 
@@ -64,12 +69,12 @@ MODEL_VERSION = "pose-v1"
 SEGMENTATION_MODEL_VERSION = "seg-v1"
 SERVICE_NAME = "raritone-ai"
 
-MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 TRYON_TIMEOUT_SECONDS = 120
 
 
 
-# AI Model
+# Models loaded once
 
 
 pose_detector = PoseDetector()
@@ -96,22 +101,24 @@ def health_check():
 
 
 
-# Common Image Validation
+# Common Upload Validation
 
 
-async def read_and_preprocess_image(file: UploadFile):
+async def read_and_decode_image(file: UploadFile):
     """
-    Validate, read, decode, and preprocess an uploaded image.
+    Validate file type/size and decode uploaded image.
+
+    This helper does NOT preprocess the image.
+    It is used by the production try-on pipeline so that
+    person_processor and garment_processor control their own
+    preprocessing.
     """
 
     logger.info(
-        "Image request received: %s",
+        "Image received | filename=%s | type=%s",
         file.filename,
+        file.content_type,
     )
-
-    # -----------------------------------------------------
-    # Validate file type
-    # -----------------------------------------------------
 
     try:
         validate_image_type(file.content_type)
@@ -121,10 +128,6 @@ async def read_and_preprocess_image(file: UploadFile):
             detail=str(exc),
         )
 
-    # -----------------------------------------------------
-    # Read file
-    # -----------------------------------------------------
-
     image_bytes = await file.read()
 
     if not image_bytes:
@@ -132,10 +135,6 @@ async def read_and_preprocess_image(file: UploadFile):
             status_code=400,
             detail="Uploaded image is empty.",
         )
-
-    # -----------------------------------------------------
-    # Maximum upload size
-    # -----------------------------------------------------
 
     if len(image_bytes) > MAX_FILE_SIZE:
         raise HTTPException(
@@ -146,10 +145,6 @@ async def read_and_preprocess_image(file: UploadFile):
             ),
         )
 
-    # -----------------------------------------------------
-    # Decode image
-    # -----------------------------------------------------
-
     try:
         image = decode_image(image_bytes)
     except ValueError as exc:
@@ -158,11 +153,15 @@ async def read_and_preprocess_image(file: UploadFile):
             detail=str(exc),
         )
 
-    logger.info("Image validated")
+    return image
 
-    # -----------------------------------------------------
-    # OpenCV preprocessing
-    # -----------------------------------------------------
+
+async def read_and_preprocess_image(file: UploadFile):
+    """
+    Used by the older pose/measurement/segmentation endpoints.
+    """
+
+    image = await read_and_decode_image(file)
 
     preprocessing_start = time.perf_counter()
 
@@ -192,10 +191,6 @@ async def read_and_preprocess_image(file: UploadFile):
 
 
 async def process_pose(file: UploadFile):
-    """
-    Validate image and run pose detection.
-    """
-
     start_time = time.perf_counter()
 
     image = await read_and_preprocess_image(file)
@@ -364,9 +359,7 @@ async def segment_api(
         "background_removed_reference": (
             background_reference
         ),
-        "model_version": (
-            SEGMENTATION_MODEL_VERSION
-        ),
+        "model_version": SEGMENTATION_MODEL_VERSION,
         "processing_time": total_time,
     }
 
@@ -437,8 +430,6 @@ async def prepare_tryon_api(
             detail="Pose detection failed.",
         )
 
-    pose_available = landmarks is not None
-
     processing_time = round(
         time.perf_counter() - start_time,
         4,
@@ -447,7 +438,7 @@ async def prepare_tryon_api(
     return {
         "success": True,
         "person_detected": True,
-        "pose_available": pose_available,
+        "pose_available": landmarks is not None,
         "person_mask": mask_reference,
         "garment_region": None,
         "processing_time": processing_time,
@@ -456,7 +447,7 @@ async def prepare_tryon_api(
 
 
 
-# Final Try-On Endpoint
+# Production Try-On Endpoint
 
 
 @app.post(
@@ -464,32 +455,22 @@ async def prepare_tryon_api(
     response_model=TryOnResponse,
     responses={
         400: {
-            "description": (
-                "Invalid person or garment image"
-            )
+            "description": "Input failed quality validation"
         },
         404: {
-            "description": (
-                "No person detected in person image"
-            )
+            "description": "Person not detected"
         },
         408: {
             "description": "Try-on processing timeout"
         },
         413: {
-            "description": (
-                "Image exceeds maximum allowed size"
-            )
+            "description": "Image exceeds maximum allowed size"
         },
         422: {
-            "description": (
-                "Required image file was not provided"
-            )
+            "description": "Required image file was not provided"
         },
         500: {
-            "description": (
-                "Try-on processing failed"
-            )
+            "description": "Try-on processing failed"
         },
     },
 )
@@ -498,20 +479,23 @@ async def tryon_api(
     garment_image: UploadFile = File(...),
 ):
     """
-    Baseline pose-aware 2D virtual try-on endpoint.
+    Controlled VTON endpoint.
 
-    Pipeline:
-    Person Image
+    Request
         ↓
-    Validation
+    Upload Validation
         ↓
-    Pose Detection + Segmentation
+    Person Quality Check
         ↓
-    Garment Processing
+    Garment Quality Check
         ↓
-    Pose-Based Alignment
+    Quality Gate
         ↓
-    Baseline 2D Composite
+    Pose + Segmentation
+        ↓
+    Try-On Inference
+        ↓
+    Output Validation
         ↓
     Result
     """
@@ -519,82 +503,165 @@ async def tryon_api(
     total_start = time.perf_counter()
 
     logger.info(
-        "Try-on request received | "
-        "person=%s | garment=%s",
+        "Try-on request received | person=%s | garment=%s",
         person_image.filename,
         garment_image.filename,
     )
 
     # -----------------------------------------------------
-    # Read and validate person image
+    # 1. Decode raw uploaded images
     # -----------------------------------------------------
 
-    person = await read_and_preprocess_image(
+    person = await read_and_decode_image(
         person_image
     )
 
-    # -----------------------------------------------------
-    # Read and validate garment image
-    # -----------------------------------------------------
-
-    garment = await read_and_preprocess_image(
+    garment = await read_and_decode_image(
         garment_image
     )
 
     # -----------------------------------------------------
-    # Prepare model inputs
+    # 2. Person quality validation
     # -----------------------------------------------------
 
+    logger.info(
+        "Person quality validation started"
+    )
+
     try:
-        (
-            person_input,
-            garment_input,
-            person_mask,
-            pose_data,
-            preparation_metadata,
-        ) = prepare_tryon_input(
+        person_result = await asyncio.to_thread(
+            prepare_person_image,
             person,
-            garment,
         )
 
-    except ValueError as exc:
-        logger.warning(
-            "Try-on input preparation failed: %s",
-            str(exc),
+    except Exception as exc:
+        logger.exception(
+            "Person preprocessing failed"
         )
-
-        if "No person detected" in str(exc):
-            raise HTTPException(
-                status_code=404,
-                detail=str(exc),
-            )
 
         raise HTTPException(
             status_code=400,
-            detail=str(exc),
+            detail={
+                "success": False,
+                "status": "failed",
+                "error_code": (
+                    "PERSON_PREPROCESSING_FAILED"
+                ),
+                "message": str(exc),
+            },
         )
 
-    except Exception:
+    # -----------------------------------------------------
+    # 3. Garment quality validation
+    # -----------------------------------------------------
+
+    logger.info(
+        "Garment quality validation started"
+    )
+
+    try:
+        garment_result = await asyncio.to_thread(
+            prepare_garment_v2,
+            garment,
+        )
+
+    except Exception as exc:
         logger.exception(
-            "Unexpected try-on preparation failure"
+            "Garment preprocessing failed"
         )
 
         raise HTTPException(
-            status_code=500,
-            detail=(
-                "Failed to prepare try-on inputs."
-            ),
+            status_code=400,
+            detail={
+                "success": False,
+                "status": "failed",
+                "error_code": (
+                    "GARMENT_PREPROCESSING_FAILED"
+                ),
+                "message": str(exc),
+            },
         )
 
     # -----------------------------------------------------
-    # Run inference with timeout
+    # 4. Quality Gate
     # -----------------------------------------------------
+
+    logger.info(
+        "Running VTON quality gate"
+    )
 
     try:
-        logger.info(
-            "Try-on inference started"
+        quality_gate_result = run_quality_gate(
+            person_result,
+            garment_result,
         )
 
+    except QualityGateError as exc:
+        logger.warning(
+            "Quality gate rejected request | "
+            "code=%s | message=%s",
+            exc.error_code,
+            exc.message,
+        )
+
+        status_code = 400
+
+        if exc.error_code in {
+            "PERSON_NOT_DETECTED",
+            "POSE_NOT_DETECTED",
+        }:
+            status_code = 404
+
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "success": False,
+                "status": "failed",
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "quality": exc.quality,
+            },
+        )
+
+    quality = quality_gate_result[
+        "quality"
+    ]
+
+    logger.info(
+        "Quality gate passed | "
+        "pose=%.4f | mask=%.4f | garment=%.4f",
+        quality["pose"],
+        quality["mask"],
+        quality["garment"],
+    )
+
+    # -----------------------------------------------------
+    # 5. Validated model inputs
+    # -----------------------------------------------------
+
+    person_input = person_result[
+        "person_input"
+    ]
+
+    person_mask = person_result[
+        "person_mask"
+    ]
+
+    pose_data = person_result[
+        "pose_data"
+    ]
+
+    garment_input = garment_result[
+        "garment_input"
+    ]
+
+    # -----------------------------------------------------
+    # 6. Try-On inference
+    # -----------------------------------------------------
+
+    inference_start = time.perf_counter()
+
+    try:
         result_image, inference_metadata = (
             await asyncio.wait_for(
                 asyncio.to_thread(
@@ -615,10 +682,15 @@ async def tryon_api(
 
         raise HTTPException(
             status_code=408,
-            detail=(
-                "Try-on processing exceeded the "
-                "maximum allowed processing time."
-            ),
+            detail={
+                "success": False,
+                "status": "failed",
+                "error_code": "TRYON_TIMEOUT",
+                "message": (
+                    "Try-on processing exceeded "
+                    "the maximum allowed time."
+                ),
+            },
         )
 
     except Exception as exc:
@@ -628,36 +700,76 @@ async def tryon_api(
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"Try-on inference failed: {str(exc)}"
-            ),
+            detail={
+                "success": False,
+                "status": "failed",
+                "error_code": (
+                    "TRYON_INFERENCE_FAILED"
+                ),
+                "message": str(exc),
+            },
+        )
+
+    inference_time = round(
+        time.perf_counter()
+        - inference_start,
+        4,
+    )
+
+    # -----------------------------------------------------
+    # 7. Output validation
+    # -----------------------------------------------------
+
+    if (
+        result_image is None
+        or not hasattr(
+            result_image,
+            "size",
+        )
+        or result_image.size == 0
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "status": "failed",
+                "error_code": (
+                    "INVALID_TRYON_OUTPUT"
+                ),
+                "message": (
+                    "Try-on output image is invalid."
+                ),
+            },
         )
 
     # -----------------------------------------------------
-    # Final timing
+    # 8. Final timing
     # -----------------------------------------------------
 
     total_processing_time = round(
-        time.perf_counter() - total_start,
+        time.perf_counter()
+        - total_start,
         4,
     )
 
     logger.info(
-        "Try-on completed successfully | "
-        "preparation=%.4fs | "
-        "inference=%.4fs | "
-        "total=%.4fs",
-        preparation_metadata[
-            "total_preparation_time"
-        ],
-        inference_metadata[
-            "inference_time"
-        ],
+        "Try-on completed | "
+        "person=%.4fs | garment=%.4fs | "
+        "inference=%.4fs | total=%.4fs",
+        person_result.get(
+            "processing_time",
+            0.0,
+        ),
+        garment_result.get(
+            "processing_time",
+            0.0,
+        ),
+        inference_time,
         total_processing_time,
     )
 
     # -----------------------------------------------------
-    # Return standardized response
+    # 9. Successful response
     # -----------------------------------------------------
 
     return {
@@ -667,5 +779,12 @@ async def tryon_api(
             "result_path"
         ],
         "model_version": TRYON_MODEL_VERSION,
-        "processing_time": total_processing_time,
+        "quality": {
+            "pose": quality["pose"],
+            "mask": quality["mask"],
+            "garment": quality["garment"],
+        },
+        "processing_time": (
+            total_processing_time
+        ),
     }
