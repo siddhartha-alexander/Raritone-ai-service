@@ -224,3 +224,12 @@ POST /api/ai/tryon
 `tryon-v1-baseline` is a baseline pose-aware 2D compositing prototype.
 
 It should not be described as a photorealistic generative VTON model. A production model requires separate model, licensing, security, performance, and commercial-use validation.
+
+## Internal Evaluation
+
+The VTON evaluation pipeline is intended for internal development and model validation.
+
+Current evaluation assets are stored under:
+
+```text
+evaluation

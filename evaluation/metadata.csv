@@ -1,0 +1,25 @@
+test_id,person_image,garment_image,category,variant,expected_behavior
+test_001,darkbackground.jpg,garment.jpg,shirt/top,original,Try-on should complete successfully.
+test_002,darkbackground.jpg,garment.jpg,shirt/top,low_resolution,Quality gate should validate or reject depending on pose/image quality.
+test_003,darkbackground.jpg,garment.jpg,shirt/top,dark,Pipeline should remain stable under reduced lighting.
+test_004,darkbackground.jpg,garment.jpg,shirt/top,bright,Pipeline should remain stable under increased brightness.
+test_005,darkbackground.jpg,tshirt.jpg,t-shirt,original,Try-on should complete successfully.
+test_006,darkbackground.jpg,tshirt.jpg,t-shirt,low_resolution,Quality gate should validate or reject depending on pose/image quality.
+test_007,darkbackground.jpg,tshirt.jpg,t-shirt,dark,Pipeline should remain stable under reduced lighting.
+test_008,darkbackground.jpg,tshirt.jpg,t-shirt,bright,Pipeline should remain stable under increased brightness.
+test_009,person.jpg,garment.jpg,shirt/top,original,Try-on should complete successfully.
+test_010,person.jpg,garment.jpg,shirt/top,low_resolution,Quality gate should validate or reject depending on pose/image quality.
+test_011,person.jpg,garment.jpg,shirt/top,dark,Pipeline should remain stable under reduced lighting.
+test_012,person.jpg,garment.jpg,shirt/top,bright,Pipeline should remain stable under increased brightness.
+test_013,person.jpg,tshirt.jpg,t-shirt,original,Try-on should complete successfully.
+test_014,person.jpg,tshirt.jpg,t-shirt,low_resolution,Quality gate should validate or reject depending on pose/image quality.
+test_015,person.jpg,tshirt.jpg,t-shirt,dark,Pipeline should remain stable under reduced lighting.
+test_016,person.jpg,tshirt.jpg,t-shirt,bright,Pipeline should remain stable under increased brightness.
+test_017,person2.jpg,garment.jpg,shirt/top,original,Try-on should complete successfully.
+test_018,person2.jpg,garment.jpg,shirt/top,low_resolution,Quality gate should validate or reject depending on pose/image quality.
+test_019,person2.jpg,garment.jpg,shirt/top,dark,Pipeline should remain stable under reduced lighting.
+test_020,person2.jpg,garment.jpg,shirt/top,bright,Pipeline should remain stable under increased brightness.
+test_021,person2.jpg,tshirt.jpg,t-shirt,original,Try-on should complete successfully.
+test_022,person2.jpg,tshirt.jpg,t-shirt,low_resolution,Quality gate should validate or reject depending on pose/image quality.
+test_023,person2.jpg,tshirt.jpg,t-shirt,dark,Pipeline should remain stable under reduced lighting.
+test_024,person2.jpg,tshirt.jpg,t-shirt,bright,Pipeline should remain stable under increased brightness.
