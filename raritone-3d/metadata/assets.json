@@ -1,0 +1,55 @@
+[
+  {
+    "asset_id": "RAR-3D-001",
+    "product_id": "PRODUCT-001",
+    "product_name": "T-Shirt",
+    "source_image": "input/tshirt.jpg",
+    "generation_model": "TripoSR",
+    "model_version": "stabilityai/TripoSR",
+    "generation_method": "single-image 3D reconstruction",
+    "license": "MIT",
+    "generated_at": "2026-08-27",
+    "original_asset": "generated/RAR-3D-001-tshirt-original.glb",
+    "optimized_asset": "validated/RAR-3D-001-tshirt-optimized.glb",
+    "format": "glb",
+    "original_polygon_count": 94799,
+    "optimized_polygon_count": 47398,
+    "original_file_size_mb": 1.8105,
+    "optimized_file_size_mb": 0.8147,
+    "validation": {
+      "mesh_valid": true,
+      "texture_detected_original": true,
+      "materials_detected_original": false,
+      "texture_detected_optimized": false,
+      "materials_detected_optimized": false
+    },
+    "quality_review": {
+      "shape_accuracy": 4,
+      "texture_accuracy": 3,
+      "proportions": 4,
+      "missing_geometry": 4,
+      "visual_quality": 3,
+      "tryon_suitability": 3,
+      "average_score": 3.5
+    },
+    "processing_steps": [
+      "image input",
+      "TripoSR 3D reconstruction",
+      "OBJ export",
+      "OBJ to GLB conversion",
+      "mesh validation",
+      "polygon reduction",
+      "GLB optimization"
+    ],
+    "status": "pending_review",
+    "reviewed_by": null,
+    "approved_at": null,
+    "notes": [
+      "Geometry validation passed.",
+      "Polygon count reduced by approximately 50%.",
+      "File size reduced by approximately 55%.",
+      "Material information is missing.",
+      "Texture information was not preserved in optimized export."
+    ]
+  }
+]

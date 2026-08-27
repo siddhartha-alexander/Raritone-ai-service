@@ -1,5 +1,21 @@
+# Python virtual environments
 .venv/
 venv/
+.venv3d/
+.venv3d-py312/
+
+# Python cache
 __pycache__/
 *.pyc
-.env
+*.pyo
+
+# Model/cache files
+*.ckpt
+*.pth
+*.pt
+.cache/
+raritone-3d/.venv3d-py312/
+# External TripoSR repository
+raritone-3d/TripoSR/
+raritone-3d/.venv3d/
+raritone-3d/.venv3d-py312/

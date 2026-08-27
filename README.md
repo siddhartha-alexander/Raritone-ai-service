@@ -388,3 +388,28 @@ garment_image
 The backend performs validation and quality gating automatically before inference.
 
 The frontend should display the returned error `message` when a request is rejected by the quality gate.
+
+## 3D Asset Generation Pipeline
+
+The Raritone 3D prototype converts a product image into a candidate 3D asset and keeps it private until human review.
+
+Pipeline:
+
+```text
+Product Image
+↓
+3D Generation
+↓
+Candidate Mesh
+↓
+GLB Conversion
+↓
+Asset Validation
+↓
+Human Review
+↓
+Optimization
+↓
+Approved / Rejected
+↓
+Raritone 3D Catalog
