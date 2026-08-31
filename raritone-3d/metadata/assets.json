@@ -1,55 +1,119 @@
 [
-  {
-    "asset_id": "RAR-3D-001",
-    "product_id": "PRODUCT-001",
-    "product_name": "T-Shirt",
-    "source_image": "input/tshirt.jpg",
-    "generation_model": "TripoSR",
-    "model_version": "stabilityai/TripoSR",
-    "generation_method": "single-image 3D reconstruction",
-    "license": "MIT",
-    "generated_at": "2026-08-27",
-    "original_asset": "generated/RAR-3D-001-tshirt-original.glb",
-    "optimized_asset": "validated/RAR-3D-001-tshirt-optimized.glb",
-    "format": "glb",
-    "original_polygon_count": 94799,
-    "optimized_polygon_count": 47398,
-    "original_file_size_mb": 1.8105,
-    "optimized_file_size_mb": 0.8147,
-    "validation": {
-      "mesh_valid": true,
-      "texture_detected_original": true,
-      "materials_detected_original": false,
-      "texture_detected_optimized": false,
-      "materials_detected_optimized": false
+    {
+        "asset_id": "RAR-3D-001",
+        "product_id": "PRODUCT-001",
+        "product_name": "T-Shirt",
+        "source_image": "input/tshirt.jpg",
+        "generation_model": "TripoSR",
+        "model_version": "stabilityai/TripoSR",
+        "generation_method": "single-image 3D reconstruction",
+        "license": "MIT",
+        "generated_at": "2026-08-27",
+        "original_asset": "generated/RAR-3D-001-tshirt-original.glb",
+        "optimized_asset": "validated/RAR-3D-001-tshirt-optimized.glb",
+        "format": "glb",
+        "original_polygon_count": 94799,
+        "optimized_polygon_count": 47398,
+        "original_file_size_mb": 1.8105,
+        "optimized_file_size_mb": 0.8147,
+        "validation": {
+            "mesh_valid": true,
+            "texture_detected_original": true,
+            "materials_detected_original": false,
+            "texture_detected_optimized": false,
+            "materials_detected_optimized": false
+        },
+        "quality_review": {
+            "shape_accuracy": 4,
+            "texture_accuracy": 3,
+            "proportions": 4,
+            "missing_geometry": 4,
+            "visual_quality": 3,
+            "tryon_suitability": 3,
+            "average_score": 3.5
+        },
+        "processing_steps": [
+            "image input",
+            "TripoSR 3D reconstruction",
+            "OBJ export",
+            "OBJ to GLB conversion",
+            "mesh validation",
+            "polygon reduction",
+            "GLB optimization"
+        ],
+        "status": "pending_review",
+        "reviewed_by": null,
+        "approved_at": null,
+        "notes": [
+            "Geometry validation passed.",
+            "Polygon count reduced by approximately 50%.",
+            "File size reduced by approximately 55%.",
+            "Material information is missing.",
+            "Texture information was not preserved in optimized export."
+        ]
     },
-    "quality_review": {
-      "shape_accuracy": 4,
-      "texture_accuracy": 3,
-      "proportions": 4,
-      "missing_geometry": 4,
-      "visual_quality": 3,
-      "tryon_suitability": 3,
-      "average_score": 3.5
+    {
+        "asset_id": "RAR-3D-004",
+        "product_id": "PROD-004",
+        "product_name": "Corset",
+        "asset_type": "3d_asset",
+        "format": "glb",
+        "mesh_count": 1,
+        "vertex_count": 11067,
+        "polygon_count": 17606,
+        "material_count": 1,
+        "texture_count": 3,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "dimensions": {
+            "x": 0.03895,
+            "y": 0.057842,
+            "z": 0.03895
+        },
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 12.8423,
+        "status": "PENDING_REVIEW",
+        "source": "Khronos glTF Sample Assets",
+        "license": "CC0",
+        "usage_permission": "Permitted under source license",
+        "model": "N/A",
+        "model_version": "N/A",
+        "validation_passed": true,
+        "warnings": [],
+        "errors": [],
+        "processed_at": "2026-08-28T12:16:54"
     },
-    "processing_steps": [
-      "image input",
-      "TripoSR 3D reconstruction",
-      "OBJ export",
-      "OBJ to GLB conversion",
-      "mesh validation",
-      "polygon reduction",
-      "GLB optimization"
-    ],
-    "status": "pending_review",
-    "reviewed_by": null,
-    "approved_at": null,
-    "notes": [
-      "Geometry validation passed.",
-      "Polygon count reduced by approximately 50%.",
-      "File size reduced by approximately 55%.",
-      "Material information is missing.",
-      "Texture information was not preserved in optimized export."
-    ]
-  }
+    {
+        "asset_id": "RAR-3D-006",
+        "product_id": "PROD-006",
+        "product_name": "Damaged Helmet",
+        "asset_type": "3d_asset",
+        "format": "glb",
+        "mesh_count": 1,
+        "vertex_count": 14556,
+        "polygon_count": 15452,
+        "material_count": 1,
+        "texture_count": 5,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "dimensions": {
+            "x": 1.889954,
+            "y": 1.801969,
+            "z": 2.0
+        },
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 3.5991,
+        "status": "PENDING_REVIEW",
+        "source": "Khronos glTF Sample Assets",
+        "license": "Mixed attribution/restriction - manual license review required",
+        "usage_permission": "Evaluation/testing only until license is manually verified",
+        "model": "N/A",
+        "model_version": "N/A",
+        "validation_passed": true,
+        "warnings": [],
+        "errors": [],
+        "processed_at": "2026-08-31T12:43:48"
+    }
 ]

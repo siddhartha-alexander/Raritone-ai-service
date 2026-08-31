@@ -1,0 +1,230 @@
+[
+    {
+        "valid": true,
+        "file": "raritone-3d\\input\\RAR-3D-001-avocado-original.glb",
+        "format": "glb",
+        "mesh": true,
+        "mesh_count": 1,
+        "vertex_count": 406,
+        "polygon_count": 682,
+        "materials": true,
+        "material_count": 1,
+        "textures": true,
+        "texture_count": 3,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "bounding_box": {
+            "min": [
+                -0.021281,
+                -4.8e-05,
+                -0.013809
+            ],
+            "max": [
+                0.021281,
+                0.062848,
+                0.013809
+            ]
+        },
+        "dimensions": {
+            "x": 0.042562,
+            "y": 0.062896,
+            "z": 0.027618
+        },
+        "scene_scale": 0.080809,
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 7.7343,
+        "warnings": [],
+        "errors": []
+    },
+    {
+        "valid": true,
+        "file": "raritone-3d\\input\\RAR-3D-002-water-bottle-original.glb",
+        "format": "glb",
+        "mesh": true,
+        "mesh_count": 1,
+        "vertex_count": 2549,
+        "polygon_count": 4510,
+        "materials": true,
+        "material_count": 1,
+        "textures": true,
+        "texture_count": 4,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "bounding_box": {
+            "min": [
+                -0.05445,
+                -0.13022,
+                -0.05445
+            ],
+            "max": [
+                0.05445,
+                0.13022,
+                0.05445
+            ]
+        },
+        "dimensions": {
+            "x": 0.1089,
+            "y": 0.260441,
+            "z": 0.1089
+        },
+        "scene_scale": 0.302569,
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 8.5513,
+        "warnings": [],
+        "errors": []
+    },
+    {
+        "valid": true,
+        "file": "raritone-3d\\input\\RAR-3D-003-boombox-original.glb",
+        "format": "glb",
+        "mesh": true,
+        "mesh_count": 1,
+        "vertex_count": 3575,
+        "polygon_count": 6036,
+        "materials": true,
+        "material_count": 1,
+        "textures": true,
+        "texture_count": 4,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "bounding_box": {
+            "min": [
+                -0.009921,
+                -0.009772,
+                -0.010076
+            ],
+            "max": [
+                0.009921,
+                0.009772,
+                0.010076
+            ]
+        },
+        "dimensions": {
+            "x": 0.019842,
+            "y": 0.019543,
+            "z": 0.020152
+        },
+        "scene_scale": 0.034377,
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 10.1225,
+        "warnings": [],
+        "errors": []
+    },
+    {
+        "valid": true,
+        "file": "raritone-3d\\input\\RAR-3D-004-corset-original.glb",
+        "format": "glb",
+        "mesh": true,
+        "mesh_count": 1,
+        "vertex_count": 11505,
+        "polygon_count": 18324,
+        "materials": true,
+        "material_count": 1,
+        "textures": true,
+        "texture_count": 3,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "bounding_box": {
+            "min": [
+                -0.019475,
+                0.0,
+                -0.019475
+            ],
+            "max": [
+                0.019475,
+                0.057842,
+                0.019475
+            ]
+        },
+        "dimensions": {
+            "x": 0.03895,
+            "y": 0.057842,
+            "z": 0.03895
+        },
+        "scene_scale": 0.079874,
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 12.8664,
+        "warnings": [],
+        "errors": []
+    },
+    {
+        "valid": true,
+        "file": "raritone-3d\\input\\RAR-3D-005-barramundi-fish-original.glb",
+        "format": "glb",
+        "mesh": true,
+        "mesh_count": 1,
+        "vertex_count": 2188,
+        "polygon_count": 3864,
+        "materials": true,
+        "material_count": 1,
+        "textures": true,
+        "texture_count": 3,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "bounding_box": {
+            "min": [
+                -0.069062,
+                -0.000878,
+                -0.325373
+            ],
+            "max": [
+                0.073842,
+                0.286628,
+                0.317738
+            ]
+        },
+        "dimensions": {
+            "x": 0.142904,
+            "y": 0.287507,
+            "z": 0.643111
+        },
+        "scene_scale": 0.7188,
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 11.9096,
+        "warnings": [],
+        "errors": []
+    },
+    {
+        "valid": true,
+        "file": "raritone-3d\\input\\RAR-3D-006-damaged-helmet-original.glb",
+        "format": "glb",
+        "mesh": true,
+        "mesh_count": 1,
+        "vertex_count": 14556,
+        "polygon_count": 15452,
+        "materials": true,
+        "material_count": 1,
+        "textures": true,
+        "texture_count": 5,
+        "texture_resolutions": [
+            "2048x2048"
+        ],
+        "bounding_box": {
+            "min": [
+                -0.947459,
+                -0.900974,
+                -1.187155
+            ],
+            "max": [
+                0.942495,
+                0.900995,
+                0.812845
+            ]
+        },
+        "dimensions": {
+            "x": 1.889954,
+            "y": 1.801969,
+            "z": 2.0
+        },
+        "scene_scale": 3.289228,
+        "orientation": "Y-up (glTF convention)",
+        "file_size_mb": 3.5991,
+        "warnings": [],
+        "errors": []
+    }
+]

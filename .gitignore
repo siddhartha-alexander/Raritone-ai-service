@@ -19,3 +19,24 @@ raritone-3d/.venv3d-py312/
 raritone-3d/TripoSR/
 raritone-3d/.venv3d/
 raritone-3d/.venv3d-py312/
+# 3D pipeline generated/sample binary assets
+raritone-3d/input/*.glb
+raritone-3d/input/*.gltf
+raritone-3d/processed/*.glb
+raritone-3d/processed/*.gltf
+
+# Local 3D environments / external models
+raritone-3d/TripoSR/
+raritone-3d/.venv3d/
+raritone-3d/.venv3d-py312/
+
+# Python environments/cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Large model files
+*.safetensors
+*.ckpt
+*.pth

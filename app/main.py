@@ -3,6 +3,12 @@ import logging
 import time
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+import sys
+import shutil
+import uuid
+from pathlib import Path
+
+
 
 from app.garment_processor import prepare_garment_v2
 from app.inference import MODEL_VERSION as TRYON_MODEL_VERSION
@@ -788,3 +794,174 @@ async def tryon_api(
             total_processing_time
         ),
     }
+# ---------------------------------------------------------
+# 3D ASSET PIPELINE SETUP
+# ---------------------------------------------------------
+
+# ---------------------------------------------------------
+# 3D ASSET PIPELINE SETUP
+# ---------------------------------------------------------
+
+RARITONE_3D_DIR = (
+    Path(__file__).resolve().parent.parent / "raritone-3d"
+)
+
+if str(RARITONE_3D_DIR) not in sys.path:
+    sys.path.insert(0, str(RARITONE_3D_DIR))
+
+from pipeline import process_asset
+
+
+TEMP_3D_DIR = RARITONE_3D_DIR / "input"
+TEMP_3D_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ---------------------------------------------------------
+# 3D ASSET PROCESSING ENDPOINT
+# ---------------------------------------------------------
+
+@app.post("/api/ai/process-3d")
+async def process_3d_asset(
+    file: UploadFile = File(...)
+):
+    """
+    Upload and process an existing GLB/GLTF 3D asset.
+
+    Pipeline:
+    Upload
+        ↓
+    Validate
+        ↓
+    Process
+        ↓
+    Generate Metadata
+        ↓
+    PENDING_REVIEW
+    """
+
+    # -----------------------------------------------------
+    # 1. Validate filename
+    # -----------------------------------------------------
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="A filename is required."
+        )
+
+    # Prevent directory traversal while preserving
+    # the original asset filename for metadata extraction.
+    safe_filename = Path(file.filename).name
+
+    extension = Path(
+        safe_filename
+    ).suffix.lower()
+
+    if extension not in {
+        ".glb",
+        ".gltf",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Only GLB and GLTF files are supported."
+            ),
+        )
+
+    # -----------------------------------------------------
+    # 2. Save uploaded asset
+    # -----------------------------------------------------
+
+    input_path = (
+        TEMP_3D_DIR / safe_filename
+    )
+
+    logger.info(
+        "3D asset received | filename=%s",
+        safe_filename,
+    )
+
+    try:
+        with open(
+            input_path,
+            "wb",
+        ) as output:
+            shutil.copyfileobj(
+                file.file,
+                output,
+            )
+
+        # -------------------------------------------------
+        # 3. Run 3D asset pipeline
+        # -------------------------------------------------
+
+        logger.info(
+            "3D asset processing started | file=%s",
+            safe_filename,
+        )
+
+        result = await asyncio.to_thread(
+            process_asset,
+            str(input_path),
+        )
+
+        # -------------------------------------------------
+        # 4. Handle rejected asset
+        # -------------------------------------------------
+
+        if not result.get(
+            "success",
+            False,
+        ):
+            logger.warning(
+                "3D asset rejected | file=%s",
+                safe_filename,
+            )
+
+            return {
+                "success": False,
+                "status": "REJECTED",
+                "message": (
+                    "3D asset failed validation."
+                ),
+                "result": result,
+            }
+
+        # -------------------------------------------------
+        # 5. Successful processing
+        # -------------------------------------------------
+
+        logger.info(
+            "3D asset processed successfully | "
+            "file=%s | status=PENDING_REVIEW",
+            safe_filename,
+        )
+
+        return {
+            "success": True,
+            "status": "PENDING_REVIEW",
+            "message": (
+                "3D asset processed successfully "
+                "and is ready for review."
+            ),
+            "result": result,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        logger.exception(
+            "3D asset processing failed | file=%s",
+            safe_filename,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"3D processing failed: {str(exc)}"
+            ),
+        )
+
+    finally:
+        await file.close()

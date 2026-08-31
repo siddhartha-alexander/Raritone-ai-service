@@ -1,298 +1,306 @@
-import json
 import os
 import sys
+import json
 from pathlib import Path
 
 import trimesh
 
 
-MAX_POLYGON_COUNT = 200_000
-MAX_FILE_SIZE_MB = 50.0
-
-
-def validate_asset(asset_path):
-    """
-    Validate a GLB/GLTF candidate before human review.
-
-    Checks:
-    - File exists
-    - Supported format
-    - File size
-    - Loadable GLB/GLTF
-    - Mesh exists
-    - Mesh is non-empty
-    - Polygon count
-    - Material presence
-    - Texture/visual information
-    """
-
-    path = Path(asset_path)
-
+def validate_asset(file_path: str):
     result = {
         "valid": False,
-        "file": str(path),
+        "file": file_path,
         "format": None,
+
         "mesh": False,
-        "texture": False,
-        "materials": False,
-        "polygon_count": 0,
-        "vertex_count": 0,
         "mesh_count": 0,
-        "file_size_mb": 0.0,
+        "vertex_count": 0,
+        "polygon_count": 0,
+
+        "materials": False,
+        "material_count": 0,
+
+        "textures": False,
+        "texture_count": 0,
+        "texture_resolutions": [],
+
+        "bounding_box": None,
+        "dimensions": None,
+        "scene_scale": None,
+        "orientation": "Y-up (glTF convention)",
+
+        "file_size_mb": 0,
+
         "warnings": [],
-        "errors": [],
+        "errors": []
     }
 
-    # -----------------------------------------------------
-    # File existence
-    # -----------------------------------------------------
+    path = Path(file_path)
 
+    # --------------------------------------------------
+    # FILE VALIDATION
+    # --------------------------------------------------
     if not path.exists():
-        result["errors"].append(
-            "3D asset file does not exist."
-        )
+        result["errors"].append("File does not exist.")
         return result
 
     if not path.is_file():
-        result["errors"].append(
-            "Asset path is not a file."
-        )
+        result["errors"].append("Path is not a file.")
         return result
-
-    # -----------------------------------------------------
-    # Format
-    # -----------------------------------------------------
 
     extension = path.suffix.lower()
 
-    if extension not in {".glb", ".gltf"}:
+    if extension not in [".glb", ".gltf"]:
         result["errors"].append(
             "Unsupported format. Expected GLB or GLTF."
         )
         return result
 
-    result["format"] = extension.lstrip(".")
-
-    # -----------------------------------------------------
-    # File size
-    # -----------------------------------------------------
-
-    file_size_mb = (
-        path.stat().st_size
-        / (1024 * 1024)
-    )
-
+    result["format"] = extension.replace(".", "")
     result["file_size_mb"] = round(
-        file_size_mb,
-        4,
+        path.stat().st_size / (1024 * 1024),
+        4
     )
 
-    if file_size_mb <= 0:
-        result["errors"].append(
-            "Asset file is empty."
-        )
-        return result
-
-    if file_size_mb > MAX_FILE_SIZE_MB:
-        result["warnings"].append(
-            (
-                f"Large asset: {file_size_mb:.2f} MB. "
-                "Optimization is recommended."
-            )
-        )
-
-    # -----------------------------------------------------
-    # Load asset
-    # -----------------------------------------------------
-
+    # --------------------------------------------------
+    # LOAD / CORRUPTION CHECK
+    # --------------------------------------------------
     try:
-        scene = trimesh.load(
+        loaded = trimesh.load(
             str(path),
             force="scene",
+            process=False
         )
-
-    except Exception as exc:
+    except Exception as e:
         result["errors"].append(
-            f"Unable to load 3D asset: {exc}"
+            f"Unable to load asset. File may be corrupted: {str(e)}"
         )
         return result
 
-    # -----------------------------------------------------
-    # Collect meshes
-    # -----------------------------------------------------
-
-    meshes = []
-
-    for geometry in scene.geometry.values():
-
-        if isinstance(
-            geometry,
-            trimesh.Trimesh,
-        ):
-            meshes.append(
-                geometry
-            )
-
-    result["mesh_count"] = len(
-        meshes
-    )
-
-    if not meshes:
+    if loaded is None:
         result["errors"].append(
-            "No valid mesh found."
+            "Unable to load asset."
         )
         return result
 
-    result["mesh"] = True
+    # Convert single mesh into scene if necessary
+    if isinstance(loaded, trimesh.Trimesh):
+        scene = trimesh.Scene(loaded)
+    else:
+        scene = loaded
 
-    # -----------------------------------------------------
-    # Geometry checks
-    # -----------------------------------------------------
+    geometries = list(scene.geometry.values())
 
+    if len(geometries) == 0:
+        result["errors"].append(
+            "No mesh geometry found."
+        )
+        return result
+
+    # --------------------------------------------------
+    # MESH INFORMATION
+    # --------------------------------------------------
+    mesh_count = 0
     vertex_count = 0
     polygon_count = 0
 
-    materials_found = False
-    texture_found = False
+    material_ids = set()
+    texture_ids = set()
+    texture_resolutions = set()
 
-    for mesh in meshes:
+    for mesh in geometries:
 
-        vertex_count += len(
-            mesh.vertices
-        )
+        if not isinstance(mesh, trimesh.Trimesh):
+            continue
 
-        polygon_count += len(
-            mesh.faces
-        )
+        mesh_count += 1
 
-        # Visual information
-        visual = mesh.visual
+        vertices = len(mesh.vertices)
+        faces = len(mesh.faces)
 
-        if visual is not None:
+        vertex_count += vertices
+        polygon_count += faces
 
-            material = getattr(
-                visual,
-                "material",
-                None,
+        if vertices == 0:
+            result["warnings"].append(
+                "A mesh contains no vertices."
             )
+
+        if faces == 0:
+            result["warnings"].append(
+                "A mesh contains no faces."
+            )
+
+        # --------------------------------------------------
+        # MATERIAL INFORMATION
+        # --------------------------------------------------
+        try:
+            visual = mesh.visual
+            material = getattr(visual, "material", None)
 
             if material is not None:
-                materials_found = True
+                material_ids.add(id(material))
 
-                image = getattr(
-                    material,
-                    "image",
-                    None,
-                )
+                # ------------------------------------------
+                # TEXTURE INFORMATION
+                # ------------------------------------------
+                image = getattr(material, "image", None)
 
                 if image is not None:
-                    texture_found = True
+                    texture_ids.add(id(image))
 
-            # Vertex/face colors still represent
-            # valid visual surface information.
-            kind = getattr(
-                visual,
-                "kind",
-                None,
+                    try:
+                        width, height = image.size
+
+                        texture_resolutions.add(
+                            f"{width}x{height}"
+                        )
+
+                    except Exception:
+                        pass
+
+                # Some PBR materials may expose texture
+                # information through other attributes
+                for attr in [
+                    "baseColorTexture",
+                    "normalTexture",
+                    "emissiveTexture",
+                    "metallicRoughnessTexture",
+                    "occlusionTexture"
+                ]:
+                    texture = getattr(material, attr, None)
+
+                    if texture is not None:
+                        texture_ids.add(id(texture))
+
+                        try:
+                            if hasattr(texture, "size"):
+                                width, height = texture.size
+                                texture_resolutions.add(
+                                    f"{width}x{height}"
+                                )
+                        except Exception:
+                            pass
+
+        except Exception as e:
+            result["warnings"].append(
+                f"Could not fully inspect material: {str(e)}"
             )
 
-            if kind in {
-                "texture",
-                "vertex",
-                "face",
-            }:
-                texture_found = True
+    result["mesh_count"] = mesh_count
+    result["vertex_count"] = int(vertex_count)
+    result["polygon_count"] = int(polygon_count)
 
-    result["vertex_count"] = (
-        vertex_count
+    result["mesh"] = (
+        mesh_count > 0
+        and vertex_count > 0
+        and polygon_count > 0
     )
 
-    result["polygon_count"] = (
-        polygon_count
-    )
+    # --------------------------------------------------
+    # MATERIAL RESULTS
+    # --------------------------------------------------
+    result["material_count"] = len(material_ids)
+    result["materials"] = len(material_ids) > 0
 
-    result["materials"] = (
-        materials_found
-    )
-
-    result["texture"] = (
-        texture_found
-    )
-
-    # -----------------------------------------------------
-    # Mesh validation
-    # -----------------------------------------------------
-
-    if vertex_count == 0:
-        result["errors"].append(
-            "Mesh contains no vertices."
-        )
-
-    if polygon_count == 0:
-        result["errors"].append(
-            "Mesh contains no polygon faces."
-        )
-
-    if (
-        polygon_count
-        > MAX_POLYGON_COUNT
-    ):
-        result["warnings"].append(
-            (
-                f"High polygon count: "
-                f"{polygon_count}. "
-                "Optimization recommended."
-            )
-        )
-
-    # -----------------------------------------------------
-    # Material/texture validation
-    # -----------------------------------------------------
-
-    if not materials_found:
+    if not result["materials"]:
         result["warnings"].append(
             "No material detected."
         )
 
-    if not texture_found:
+    # --------------------------------------------------
+    # TEXTURE RESULTS
+    # --------------------------------------------------
+    result["texture_count"] = len(texture_ids)
+    result["textures"] = len(texture_ids) > 0
+
+    result["texture_resolutions"] = sorted(
+        list(texture_resolutions)
+    )
+
+    if not result["textures"]:
         result["warnings"].append(
-            "No texture information detected."
+            "No linked texture detected."
         )
 
-    # -----------------------------------------------------
-    # Final validity
-    # -----------------------------------------------------
+    # --------------------------------------------------
+    # BOUNDING BOX / DIMENSIONS / SCALE
+    # --------------------------------------------------
+    try:
+        bounds = scene.bounds
 
-    result["valid"] = (
-        len(result["errors"]) == 0
-    )
+        if bounds is not None:
+
+            minimum = bounds[0]
+            maximum = bounds[1]
+
+            dimensions = maximum - minimum
+
+            result["bounding_box"] = {
+                "min": [
+                    round(float(x), 6)
+                    for x in minimum
+                ],
+                "max": [
+                    round(float(x), 6)
+                    for x in maximum
+                ]
+            }
+
+            result["dimensions"] = {
+                "x": round(float(dimensions[0]), 6),
+                "y": round(float(dimensions[1]), 6),
+                "z": round(float(dimensions[2]), 6)
+            }
+
+    except Exception as e:
+        result["warnings"].append(
+            f"Could not calculate bounding box: {str(e)}"
+        )
+
+    try:
+        result["scene_scale"] = round(
+            float(scene.scale),
+            6
+        )
+    except Exception:
+        result["warnings"].append(
+            "Could not determine scene scale."
+        )
+
+    # --------------------------------------------------
+    # FINAL VALIDATION
+    # --------------------------------------------------
+    if not result["mesh"]:
+        result["errors"].append(
+            "Asset does not contain valid mesh geometry."
+        )
+
+    if result["polygon_count"] <= 0:
+        result["errors"].append(
+            "Asset contains no polygons."
+        )
+
+    result["valid"] = len(result["errors"]) == 0
 
     return result
 
 
-def main():
+if __name__ == "__main__":
+
     if len(sys.argv) < 2:
-
         print(
-            "Usage: python validation/asset_validator.py "
-            "<asset.glb>"
+            "Usage: python asset_validator.py <asset.glb|asset.gltf>"
         )
-
-        return
+        sys.exit(1)
 
     asset_path = sys.argv[1]
 
-    result = validate_asset(
-        asset_path
-    )
+    validation_result = validate_asset(asset_path)
 
     print(
         json.dumps(
-            result,
-            indent=4,
+            validation_result,
+            indent=4
         )
     )
-
-
-if __name__ == "__main__":
-    main()
