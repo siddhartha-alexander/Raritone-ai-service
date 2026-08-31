@@ -1,0 +1,6 @@
+product_id,category,input_image,model,gpu,model_inference_seconds,mesh_extraction_seconds,output_mesh,glb_export,texture_baking,status,failure_reason
+RAR-3D-001,tshirt,tshirt.jpg,TripoSR,Tesla T4,1.09568,2.23169,mesh.obj,implemented_in_notebook,failed_on_headless_opengl,mesh_generated,Texture baking requires a headless OpenGL/EGL compatible context
+RAR-3D-002,shirt,not_run,TripoSR,Tesla T4,,,,,,not_run,
+RAR-3D-003,shoe,not_run,TripoSR,Tesla T4,,,,,,not_run,
+RAR-3D-004,handbag,not_run,TripoSR,Tesla T4,,,,,,not_run,
+RAR-3D-005,dress,not_run,TripoSR,Tesla T4,,,,,,not_run,
