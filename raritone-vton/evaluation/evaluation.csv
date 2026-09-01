@@ -1,0 +1,2 @@
+test_id,person_image,garment_image,garment_alignment,garment_preservation,body_alignment,texture_quality,artifacts,overall,notes
+1,darkbackground.jpg,blue_tshirt_converted.jpg,4,4,4,4,4,4,"Successful GPU VTON result; garment follows upper body well; person structure and arms preserved; visible watermark originates from source person image."

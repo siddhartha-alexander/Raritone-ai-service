@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary API files
+outputs/uploads/
+outputs/results/
+outputs/demo/
+
+# Large model files
+models/*.task
+models/*.tflite
+models/*.onnx
+models/*.safetensors
+
+# Kaggle/model caches
+.cache/
+huggingface/
+*.ckpt
+*.pth
+*.pt
+
+# Temporary files
+*.tmp
+*.log
+
+# Environment variables
+.env
