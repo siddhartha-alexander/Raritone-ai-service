@@ -5,12 +5,12 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 
-from tryon_pipeline import TryOnPipeline
+from raw_tryon import RawTryOnPipeline
 
 
 app = FastAPI(
     title="Raritone 2D Virtual Try-On API",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 
@@ -23,19 +23,17 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-pipeline = TryOnPipeline(
-    pose_model_path=str(
-        BASE_DIR
-        / "models"
-        / "pose_landmarker_lite.task"
-    )
-)
-
-
 ALLOWED_TYPES = {
     "image/jpeg",
     "image/png"
 }
+
+
+print("Loading trained VTON pipeline...")
+
+pipeline = RawTryOnPipeline()
+
+print("Trained VTON pipeline loaded.")
 
 
 @app.get("/api/ai/health")
@@ -43,7 +41,8 @@ def health():
     return {
         "success": True,
         "service": "raritone-vton",
-        "status": "healthy"
+        "status": "healthy",
+        "model": "RaritoneVTONNet"
     }
 
 
@@ -112,11 +111,23 @@ async def tryon(
     person_path.write_bytes(person_bytes)
     garment_path.write_bytes(garment_bytes)
 
-    result = pipeline.run(
-        person_image=str(person_path),
-        garment_image=str(garment_path),
-        output_dir=str(request_result_dir)
+    result_path = (
+        request_result_dir
+        / "tryon_result.jpg"
     )
+
+    try:
+        result = pipeline.run(
+            person_image_path=str(person_path),
+            garment_image_path=str(garment_path),
+            output_path=str(result_path)
+        )
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Try-on processing failed: {str(error)}"
+        )
 
     if not result.get("success"):
         raise HTTPException(
@@ -136,6 +147,7 @@ async def tryon(
         "success": True,
         "request_id": request_id,
         "processing_time": processing_time,
+        "model": "RaritoneVTONNet",
         "result": (
             f"/api/ai/tryon/result/{request_id}"
         )
@@ -146,6 +158,7 @@ async def tryon(
     "/api/ai/tryon/result/{request_id}"
 )
 def get_tryon_result(request_id: str):
+
     result_path = (
         RESULT_DIR
         / request_id
